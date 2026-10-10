@@ -1,0 +1,8 @@
+# Rust / Tauri 构建产物
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# 系统与编辑器杂项
+Thumbs.db
+.DS_Store
+*.log
