@@ -139,6 +139,18 @@ fn startup_file() -> Option<String> {
         .map(|p| canon(Path::new(&p)).to_string_lossy().into_owned())
 }
 
+// 前端监听用：毫秒级 mtime，外部修改后自动重载
+#[tauri::command]
+fn stat_mtime(path: String) -> Option<u64> {
+    fs::metadata(&path)
+        .ok()?
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs() * 1000 + u64::from(d.subsec_millis()))
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _| {
@@ -156,7 +168,8 @@ fn main() {
             list_tree,
             read_text_file,
             write_text_file,
-            startup_file
+            startup_file,
+            stat_mtime
         ])
         .run(tauri::generate_context!())
         .expect("error while running md-viewer");

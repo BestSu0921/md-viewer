@@ -1102,6 +1102,7 @@ body.resizing .pane { pointer-events: none; }
     folder: null,        // 当前打开的文件夹
     path: null,          // 当前打开的 md 文件
     dirty: false,
+    mtime: 0,            // 当前文件 mtime（监听外部修改）
     expanded: new Set(), // 展开的文件夹路径
     filter: '',
   };
@@ -2153,6 +2154,7 @@ body.resizing .pane { pointer-events: none; }
     try {
       const content = await invoke('read_text_file', { path });
       state.path = path;
+      state.mtime = (await invoke('stat_mtime', { path })) || 0;
       src.value = content;
       setDirty(false);
       lastRendered = null;
@@ -2171,6 +2173,27 @@ body.resizing .pane { pointer-events: none; }
       toast(String(err));
     }
   }
+
+  // 监听外部修改（如 Agent 正在写这份文档）：未编辑时自动重载，编辑中只提示不打架
+  let reloadHinted = false;
+  setInterval(async () => {
+    if (!state.path || state.dirty) return;
+    try {
+      const m = await invoke('stat_mtime', { path: state.path });
+      if (!m || !state.mtime || m === state.mtime) return;
+      const caret = src.selectionStart;
+      const content = await invoke('read_text_file', { path: state.path });
+      state.mtime = m;
+      src.value = content;
+      setDirty(false);
+      lastRendered = null;
+      refreshOverlay();
+      renderPreview(false);
+      anchors = null;
+      try { src.setSelectionRange(Math.min(caret, src.value.length), Math.min(caret, src.value.length)); } catch { /* 忽略 */ }
+      if (!reloadHinted) { toast('文件被外部修改，已自动重新加载'); reloadHinted = true; }
+    } catch { /* 文件暂不可读（正在写入），下轮再试 */ }
+  }, 1500);
 
   async function loadTree(folder) {
     try {
@@ -2204,6 +2227,7 @@ body.resizing .pane { pointer-events: none; }
     if (!state.path) { toast('当前没有可保存的文件'); return; }
     try {
       await invoke('write_text_file', { path: state.path, content: src.value });
+      state.mtime = (await invoke('stat_mtime', { path: state.path })) || 0;
       setDirty(false);
       toast('已保存 ' + fileBaseName(state.path));
     } catch (err) {
