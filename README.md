@@ -1,12 +1,13 @@
 # MD 阅览
 
-> sqs · 本地 Markdown 查看器
+本地 Markdown 查看器：打开一个文件夹，所有 `.md` 文件在左侧列成树，点击即读；左侧可直接编辑，右侧实时预览。Windows 单文件 exe，约 3 MB，离线可用。
 
-本地 Markdown 查看器：打开一个文件夹，所有 `.md` 文件在左侧列成树，点击即读；左侧可直接编辑，右侧实时预览。Windows 单文件 exe，约 2 MB，离线可用。
+## 下载
 
-仓库：<https://github.com/BestSu0921/md-viewer>
+到 [Releases](https://github.com/BestSu0921/md-viewer/releases) 下载：
 
-![Logo](docs/logo.png)
+- `MDViewer_1.1.0_x64-setup.exe` 安装版，带 `.md` 文件关联，双击文档直接打开
+- `MDViewer_1.1.0_portable.zip` 免安装版，解压即用
 
 ![界面](docs/screenshot.png)
 
