@@ -6,3 +6,7 @@ src-tauri/gen/schemas/
 Thumbs.db
 .DS_Store
 *.log
+
+# 本地副本产物（固定名启动器）
+/MD阅览*.exe
+/md-viewer.exe
