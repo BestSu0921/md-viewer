@@ -6,8 +6,8 @@
 
 到 [Releases](https://github.com/BestSu0921/md-viewer/releases) 下载：
 
-- `MDViewer_1.1.0_x64-setup.exe` 安装版，带 `.md` 文件关联，双击文档直接打开
-- `MDViewer_1.1.0_portable.zip` 免安装版，解压即用
+- `MDViewer_1.2.0_x64-setup.exe` 安装版，带 `.md` 文件关联，双击文档直接打开
+- `MDViewer_1.2.0_portable.zip` 免安装版，解压即用
 
 ![界面](docs/screenshot.png)
 

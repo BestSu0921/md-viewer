@@ -133,6 +133,61 @@ body.no-tree .sidebar { width: 0; border-right-color: transparent; overflow: hid
 .icon-btn:hover { background: var(--side-iconbtn-hover); color: var(--ink); }
 .icon-btn svg { width: 15px; height: 15px; }
 .side-tools { flex: none; padding: 10px 12px 8px; }
+.folder-list {
+  flex: none;
+  max-height: 170px;
+  overflow: auto;
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid var(--side-line);
+  scrollbar-width: thin;
+  scrollbar-color: #d0c6b2 transparent;
+}
+.folder-list:empty { display: none; border-bottom-color: transparent; }
+.fl-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--side-text);
+  white-space: nowrap;
+  font-size: 12.5px;
+  transition: background .12s;
+}
+.fl-row:hover { background: var(--side-hover); }
+.fl-row.active { background: var(--accent); color: #fff; }
+.fl-row .tn-name { overflow: hidden; text-overflow: ellipsis; }
+.fl-row .tn-ico { flex: none; width: 14px; height: 14px; opacity: .8; display: grid; place-items: center; }
+.fl-row .tn-ico svg { width: 13px; height: 13px; }
+.ctx-menu {
+  position: fixed;
+  z-index: 30;
+  min-width: 150px;
+  padding: 5px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: 0 14px 34px -14px rgba(24, 19, 12, .45);
+}
+.ctx-menu[hidden] { display: none; }
+.ctx-item {
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-item:hover { background: var(--side-hover); }
+.ctx-item.danger { color: #c1402a; }
+.ctx-item.danger:hover { background: rgba(193, 64, 42, .1); }
 .side-search {
   width: 100%;
   height: 30px;
@@ -979,6 +1034,7 @@ body.resizing .pane { pointer-events: none; }
       </div>
     </div>
     <div class="side-tools"><input class="side-search" id="treeFilter" type="text" placeholder="筛选文件名…" spellcheck="false"></div>
+    <div class="folder-list" id="folderList"></div>
     <nav class="tree" id="tree"></nav>
     <div class="side-empty" id="sideEmpty">
       <div>还没有打开文件夹<br>选一个，立刻列出所有 Markdown</div>
@@ -1067,6 +1123,7 @@ body.resizing .pane { pointer-events: none; }
 </div>
 
 <div class="theme-pop" id="themePop" hidden></div>
+<div class="ctx-menu" id="ctxMenu" hidden></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -1103,6 +1160,7 @@ body.resizing .pane { pointer-events: none; }
     path: null,          // 当前打开的 md 文件
     dirty: false,
     mtime: 0,            // 当前文件 mtime（监听外部修改）
+    folders: LS.get('folders', []), // 最近打开的文件夹列表
     expanded: new Set(), // 展开的文件夹路径
     filter: '',
   };
@@ -2106,6 +2164,96 @@ body.resizing .pane { pointer-events: none; }
     markActive();
   });
 
+  /* ================= 最近文件夹列表 ================= */
+
+  function renderFolders() {
+    const box = $('folderList');
+    box.textContent = '';
+    for (const f of state.folders) {
+      const row = document.createElement('div');
+      row.className = 'fl-row' + (f.path === state.folder ? ' active' : '');
+      row.dataset.path = f.path;
+      row.title = f.path + '（右键管理）';
+      row.innerHTML = '<span class="tn-ico">' + ICON_FOLDER + '</span><span class="tn-name"></span>';
+      row.querySelector('.tn-name').textContent = f.name || fileBaseName(f.path);
+      box.appendChild(row);
+    }
+  }
+
+  function upsertFolder(p, lastFile) {
+    const old = state.folders.find((f) => f.path === p);
+    state.folders = state.folders.filter((f) => f.path !== p);
+    state.folders.unshift({ path: p, name: fileBaseName(p), lastFile: lastFile || (old && old.lastFile) || null });
+    if (state.folders.length > 12) state.folders.length = 12;
+    LS.set('folders', state.folders);
+    renderFolders();
+  }
+
+  function removeFolder(p) {
+    state.folders = state.folders.filter((f) => f.path !== p);
+    LS.set('folders', state.folders);
+    renderFolders();
+    if (state.folder === p) {
+      state.folder = null;
+      state.path = null;
+      state.treeData = null;
+      tree.textContent = '';
+      treeFilter.value = '';
+      src.value = WELCOME;
+      setDirty(false);
+      lastRendered = null;
+      refreshOverlay();
+      renderPreview(false);
+      renderTree();
+      markActive();
+      updateTitles();
+    }
+    toast('已从列表移除');
+  }
+
+  async function switchFolder(p) {
+    if (p === state.folder) return;
+    const node = await loadTree(p);
+    if (!node) return;
+    const rec = state.folders.find((f) => f.path === p);
+    if (rec && rec.lastFile) openFile(rec.lastFile);
+    else {
+      const first = firstMarkdown(node);
+      if (first) openFile(first);
+    }
+    renderFolders();
+  }
+
+  // 文件夹行：左键切换；右键管理（打开 / 从列表移除）
+  $('folderList').addEventListener('click', (e) => {
+    const row = e.target.closest('.fl-row');
+    if (row) switchFolder(row.dataset.path);
+  });
+  const ctxMenu = $('ctxMenu');
+  let ctxTarget = null;
+  $('folderList').addEventListener('contextmenu', (e) => {
+    const row = e.target.closest('.fl-row');
+    if (!row) return;
+    e.preventDefault();
+    ctxTarget = row.dataset.path;
+    ctxMenu.textContent = '';
+    const mk = (label, cls, fn) => {
+      const b = document.createElement('button');
+      b.className = 'ctx-item' + (cls ? ' ' + cls : '');
+      b.textContent = label;
+      b.addEventListener('click', () => { ctxMenu.hidden = true; fn(); });
+      ctxMenu.appendChild(b);
+    };
+    mk('打开', '', () => switchFolder(ctxTarget));
+    mk('从列表中移除', 'danger', () => removeFolder(ctxTarget));
+    ctxMenu.style.left = Math.min(e.clientX, window.innerWidth - 170) + 'px';
+    ctxMenu.style.top = Math.min(e.clientY, window.innerHeight - 96) + 'px';
+    ctxMenu.hidden = false;
+  });
+  document.addEventListener('click', (e) => {
+    if (!ctxMenu.hidden && !ctxMenu.contains(e.target)) ctxMenu.hidden = true;
+  });
+
   /* ================= 打开 / 保存 ================= */
 
   const WELCOME = `# MD 阅览
@@ -2166,6 +2314,8 @@ body.resizing .pane { pointer-events: none; }
       expandTo(path);
       LS.set('folder', state.folder);
       LS.set('file', path);
+      const folderRec = state.folders.find((f) => f.path === state.folder);
+      if (folderRec) { folderRec.lastFile = path; LS.set('folders', state.folders); }
       renderTree();
       markActive();
       updateTitles();
@@ -2205,8 +2355,10 @@ body.resizing .pane { pointer-events: none; }
       state.filter = '';
       treeFilter.value = '';
       renderTree();
+      renderFolders();
       updateTitles();
       LS.set('folder', folder);
+      upsertFolder(folder);
       return node;
     } catch (err) {
       toast(String(err));
@@ -2404,6 +2556,7 @@ body.resizing .pane { pointer-events: none; }
   applyTheme(LS.get('theme', 'paper'));
   setSplit(LS.get('split', 0.44));
   setReading(LS.get('reading', false));
+  renderFolders();
   setNoTree(LS.get('noTree', false));
   updateTitles();
 
