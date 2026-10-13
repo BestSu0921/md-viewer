@@ -1160,7 +1160,7 @@ body.resizing .pane { pointer-events: none; }
     path: null,          // 当前打开的 md 文件
     dirty: false,
     mtime: 0,            // 当前文件 mtime（监听外部修改）
-    folders: LS.get('folders', []), // 最近打开的文件夹列表
+    folders: [],         // 最近打开的文件夹列表（LS 就绪后填充）
     expanded: new Set(), // 展开的文件夹路径
     filter: '',
   };
@@ -1169,6 +1169,7 @@ body.resizing .pane { pointer-events: none; }
     get(k, d) { try { const v = localStorage.getItem('mv.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem('mv.' + k, JSON.stringify(v)); } catch { /* 忽略 */ } },
   };
+  state.folders = LS.get('folders', []);
 
   /* ================= markdown renderer（复刻自原页面，含图片扩展） ================= */
 
